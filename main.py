@@ -69,7 +69,7 @@ TOOLS = {
 # === LOAD SKILL ===
 def load_skill():
     try:
-        with open("awp_skill/skill.md", "r", encoding="utf-8") as f:
+        with ("awp_skill/skill.md", "r", encoding="utf-8") as f:
             return f.read()
     except:
         return ""
@@ -140,15 +140,25 @@ If tool needed reply JSON:
 
 # === AWP ===
 def on_message(ws, message):
-    print("========== RAW AWP ==========")
-    print(message)
-    print("=============================")
+    print("📩 RAW:", message)
 
     try:
         data = json.loads(message)
-        print("📦 PARSED:", json.dumps(data, indent=2))
     except:
-        print("⚠️ NOT JSON")
+        return
+
+    # HANDLE TASK
+    if "question" in str(data).lower():
+        q = data.get("question") or data.get("data")
+
+        print("🧠 TASK:", q)
+
+        answer = ask_ai("system", q)
+
+        ws.send(json.dumps({
+            "type": "answer_submit",
+            "answer": answer
+        }))
         
 def send(ws, payload):
     print("📤 SEND:", json.dumps(payload, indent=2))
@@ -171,16 +181,31 @@ def keep_alive(ws):
 def on_open(ws):
     print("🚀 CONNECTED TO AWP")
 
+    # INIT SESSION
     ws.send(json.dumps({
-    "type": "register",
-    "agent": "telegram-agent",
-    "id": "agent-001",
-    "capabilities": ["qa"]
+        "type": "init",
+        "agent": {
+            "id": "agent-001",
+            "name": "telegram-agent",
+            "capabilities": ["qa", "analysis"]
+        }
     }))
 
+    # REGISTER
     ws.send(json.dumps({
-    "type": "join",
-    "subnet": "benchmark"
+        "type": "agent_register",
+        "id": "agent-001"
+    }))
+
+    # JOIN BENCHMARK
+    ws.send(json.dumps({
+        "type": "subnet_join",
+        "subnet": "benchmark"
+    }))
+
+    # READY STATE
+    ws.send(json.dumps({
+        "type": "ready"
     }))
 
     threading.Thread(target=keep_alive, args=(ws,), daemon=True).start()
