@@ -1,12 +1,23 @@
 import requests
+import os
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 from skill_loader import load_skill
+import time
 
-TOKEN = "ISI_BOT_TOKEN"
+while True:
+    try:
+        app.run_polling()
+    except Exception as e:
+        print("ERROR:", e)
+        time.sleep(5)
+
+
 BLINK_API = "https://api.blink.new/v1/chat/completions"
-BLINK_KEY = "ISI_API_KEY_BLINK"
+TOKEN = os.getenv("TOKEN")
+BLINK_KEY = os.getenv("BLINK_KEY")
 
 skill_context = load_skill()
 
