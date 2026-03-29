@@ -4,6 +4,9 @@ import threading
 from hashlib import sha256
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+import asyncio
+
+asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 
 # === ENV ===
 TOKEN = os.getenv("TOKEN")
@@ -221,6 +224,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(str(reply))
 
 app = ApplicationBuilder().token(TOKEN).build()
+app.run_polling(drop_pending_updates=True)
 app.add_handler(MessageHandler(filters.TEXT, chat))
 
 print("🚀 AGENT LIVE")
