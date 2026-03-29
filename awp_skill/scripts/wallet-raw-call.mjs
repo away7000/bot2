@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+/**
+ * wallet-raw-call.mjs — Send raw contract calls using awp-wallet internal signing
+ *
+ * The awp-wallet CLI send command only supports token transfers (--to, --amount, --asset)
+ * and does not support raw calldata. This script directly uses awp-wallet's internal
+ * modules (keystore, session, viem) to sign and send transactions with arbitrary calldata.
+ *
+ * Usage:
+ *   node wallet-raw-call.mjs --token <session> --to <contract> --data <hex> [--value <wei>]
+ *
+ * Must be run from the awp-wallet directory (or set the AWP_WALLET_DIR environment variable)
+ * so that node_modules and internal modules are resolved correctly.
+ */
+
+import { parseArgs } from "node:util"
+import { resolve, dirname } from "node:path"
+import { realpathSync, existsSync } from "node:fs"
+
+// ── Parse command-line arguments ──────────────────────────────────
+const { values: args } = parseArgs({
+  options: {
+    token:  { type: "string" },
+    to:     { type: "string" },
+    data:   { type: "string" },
+    value:  { type: "string", default: "0" },
+    chain:  { type: "string", default: "base" },
+  },
+  strict: true,
+})
+
+if (!args.token || !args.to || !args.data) {
+  console.error(JSON.stringify({ error: "Required: --token, --to, --data" }))
+  process.exit(1)
+}
+
+// ── Format validation ──────────────────────────────────────────
+if (!/^0x[0-9a-fA-F]{40}$/.test(args.to)) {
+  console.error(JSON.stringify({ error: `Invalid --to address: ${args.to}` }))
+  process.exit(1)
+}
+if (!/^0x(?:[0-9a-fA-F]{2}){4,}$/.test(args.data)) {
+  console.error(JSON.stringify({ error: `Invalid --data hex: ${args.data}` }))
+  process.exit(1)
+}
+
+// ── Locate the awp-wallet installation directory ──────────────────────────
+function findAwpWalletDir() {
+  // 1. Environment variable
+  if (process.env.AWP_WALLET_DIR && existsSync(process.env.AWP_WALLET_DIR)) {
+    return process.env.AWP_WALLET_DIR
+  }
+  // 2. Search for the awp-wallet executable in PATH (pure Node.js, no child_process needed)
+  const pathDirs = (process.env.PATH || "").split(":")
+  for (const dir of pathDirs) {
+    const candidate = resolve(dir, "awp-wallet")
+    if (existsSync(candidate)) {
+      try {
+        const real = realpathSync(candidate)
+        // real = .../awp-wallet/scripts/wallet-cli.js → two levels up = awp-wallet/
+        return dirname(dirname(real))
+      } catch { /* skip symlinks that cannot be resolved */ }
+    }
+  }
+  {
+    // 3. Default path
+    const defaultDir = resolve(process.env.HOME, "awp-wallet")
+    if (existsSync(resolve(defaultDir, "scripts/lib/keystore.js"))) return defaultDir
+    console.error(JSON.stringify({ error: "Cannot locate awp-wallet installation. Set AWP_WALLET_DIR." }))
+    process.exit(1)
+  }
+}
+
+const AWP_DIR = findAwpWalletDir()
+
+// ── Import awp-wallet internal modules ─────────────────────────
+const { validateSession, requireScope } = await import(`${AWP_DIR}/scripts/lib/session.js`)
+const { loadSigner, getAddress } = await import(`${AWP_DIR}/scripts/lib/keystore.js`)
+const { resolveChainId, viemChain, publicClient, getRpcUrl } = await import(`${AWP_DIR}/scripts/lib/chains.js`)
+
+const { createWalletClient, http } = await import(`${AWP_DIR}/node_modules/viem/index.js`)
+
+// ── Validate session ─────────────────────────────────────
+try {
+  validateSession(args.token)
+  requireScope(args.token, "transfer")
+} catch (e) {
+  console.error(JSON.stringify({ error: `Session error: ${e.message}` }))
+  process.exit(1)
+}
+
+// ── Build and send transaction ───────────────────────────────────
+try {
+  const chainId = resolveChainId(args.chain)
+  const chainObj = viemChain(chainId)
+  const { account: signer } = loadSigner()
+  if (!signer) {
+    console.error(JSON.stringify({ error: "Failed to load signer from keystore" }))
+    process.exit(1)
+  }
+
+  const walletClient = createWalletClient({
+    account: signer,
+    chain: chainObj,
+    transport: http(getRpcUrl(chainId)),
+  })
+
+  const tx = {
+    to: args.to,
+    data: args.data,
+  }
+
+  // Support sending ETH (contract calls with value > 0)
+  if (args.value && args.value !== "0") {
+    try {
+      tx.value = BigInt(args.value)
+    } catch {
+      console.error(JSON.stringify({ error: `Invalid --value (must be integer wei): ${args.value}` }))
+      process.exit(1)
+    }
+  }
+
+  const hash = await walletClient.sendTransaction(tx)
+
+  // Wait for confirmation
+  const client = publicClient(chainId)
+  const receipt = await client.waitForTransactionReceipt({
+    hash,
+    timeout: 90_000,
+    confirmations: 1,
+  })
+
+  console.log(JSON.stringify({
+    status: receipt.status === "success" ? "confirmed" : "reverted",
+    txHash: hash,
+    chain: chainObj.name,
+    chainId,
+    to: args.to,
+    gasUsed: receipt.gasUsed.toString(),
+    blockNumber: Number(receipt.blockNumber),
+  }))
+} catch (e) {
+  console.error(JSON.stringify({ error: `Transaction failed: ${e.message}` }))
+  process.exit(1)
+}
