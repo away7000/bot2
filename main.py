@@ -28,6 +28,29 @@ def save_memory(m):
 memory = load_memory()
 
 # === WALLET ===
+WALLET_FILE = "wallet.json"
+
+def load_wallet():
+    if os.path.exists(WALLET_FILE):
+        with open(WALLET_FILE, "r") as f:
+            return json.load(f)
+
+    private_key = secrets.token_hex(32)
+    address = "0x" + sha256(private_key.encode()).hexdigest()[:40]
+
+    wallet = {
+        "private_key": private_key,
+        "address": address
+    }
+
+    with open(WALLET_FILE, "w") as f:
+        json.dump(wallet, f)
+
+    return wallet
+
+wallet_data = load_wallet()
+WALLET_ADDRESS = wallet_data["address"]
+
 def create_wallet(user_id):
     private_key = secrets.token_hex(32)
     address = "0x" + sha256(private_key.encode()).hexdigest()[:40]
@@ -147,15 +170,17 @@ def on_message(ws, message):
     except:
         return
 
-    # deteksi task
-    if "question" in str(data).lower():
-        q = data.get("question") or data.get("data")
+    # 🔥 DETECT TASK
+    if "task" in str(data).lower() or "question" in str(data).lower():
+        q = data.get("question") or data.get("task") or data.get("data")
+
+        print("🧠 TASK:", q)
 
         answer = ask_ai("system", q)
 
         ws.send(json.dumps({
-            "type": "answer",
-            "data": answer
+            "type": "task_result",
+            "answer": answer
         }))
         
 def send(ws, payload):
@@ -177,34 +202,35 @@ def keep_alive(ws):
         time.sleep(20)
 
 def on_open(ws):
-    print("🚀 CONNECTED (LISTEN MODE)")
+    print("🚀 CONNECTED TO AWP")
 
-    # INIT SESSION
+    wallet = WALLET_ADDRESS
+
+    # 🔥 STEP 1 — HELLO (identity)
     ws.send(json.dumps({
-        "type": "init",
+        "type": "agent_hello",
+        "address": wallet,
         "agent": {
-            "id": "agent-001",
             "name": "telegram-agent",
+            "version": "1.0",
             "capabilities": ["qa", "analysis"]
         }
     }))
 
-    # REGISTER
+    # 🔥 STEP 2 — DECLARE READY
     ws.send(json.dumps({
-        "type": "agent_register",
-        "id": "agent-001"
+        "type": "agent_ready",
+        "address": wallet
     }))
 
-    # JOIN BENCHMARK
+    # 🔥 STEP 3 — SUBSCRIBE TASK CHANNEL
     ws.send(json.dumps({
-        "type": "subnet_join",
+        "type": "subscribe",
+        "channel": "tasks",
         "subnet": "benchmark"
     }))
 
-    # READY STATE
-    ws.send(json.dumps({
-        "type": "ready"
-    }))
+    # 🔥 KEEP ALIVE
 
     threading.Thread(target=keep_alive, args=(ws,), daemon=True).start()
 
