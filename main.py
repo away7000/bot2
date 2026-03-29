@@ -140,8 +140,20 @@ If tool needed reply JSON:
 
 # === AWP ===
 def on_message(ws, message):
-    print("📩 AWP RAW:", message)
+    print("========== RAW AWP ==========")
+    print(message)
+    print("=============================")
 
+    try:
+        data = json.loads(message)
+        print("📦 PARSED:", json.dumps(data, indent=2))
+    except:
+        print("⚠️ NOT JSON")
+        
+def send(ws, payload):
+    print("📤 SEND:", json.dumps(payload, indent=2))
+    ws.send(json.dumps(payload))
+    
 def on_error(ws, error):
     print("❌ AWP ERROR:", error)
 
@@ -160,15 +172,15 @@ def on_open(ws):
     print("🚀 CONNECTED TO AWP")
 
     ws.send(json.dumps({
-        "type": "register",
-        "agent": "telegram-agent",
-        "id": "agent-001",
-        "capabilities": ["qa"]
+    "type": "register",
+    "agent": "telegram-agent",
+    "id": "agent-001",
+    "capabilities": ["qa"]
     }))
 
     ws.send(json.dumps({
-        "type": "join",
-        "subnet": "benchmark"
+    "type": "join",
+    "subnet": "benchmark"
     }))
 
     threading.Thread(target=keep_alive, args=(ws,), daemon=True).start()
