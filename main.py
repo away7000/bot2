@@ -25,8 +25,10 @@ def ask_ai(text):
     try:
         r = requests.post(BLINK_API, headers=headers, json=data)
         return r.json()["choices"][0]["message"]["content"]
-    except:
-        return "AI error"
+    return f"ERROR API:\n{res}"
+
+    except Exception as e:
+        return f"ERROR: {str(e)}"
 
 # === HANDLER ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
