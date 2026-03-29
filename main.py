@@ -16,7 +16,7 @@ def ask_ai(text):
     }
 
     data = {
-        "model": "gpt-4o-mini",
+        "model": "openai/gpt-4o-mini",
         "messages": [
             {"role": "user", "content": text}
         ]
@@ -24,11 +24,15 @@ def ask_ai(text):
 
     try:
         r = requests.post(BLINK_API, headers=headers, json=data)
-        return r.json()["choices"][0]["message"]["content"]
-    return f"ERROR API:\n{res}"
+        res = r.json()
+
+        if "choices" in res:
+            return res["choices"][0]["message"]["content"]
+        else:
+            return "ERROR API:\n" + str(res)
 
     except Exception as e:
-        return f"ERROR: {str(e)}"
+        return "ERROR: " + str(e)
 
 # === HANDLER ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
