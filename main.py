@@ -1,4 +1,6 @@
 import os, json, time, threading, requests, secrets
+import websocket
+import threading
 from hashlib import sha256
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
@@ -38,7 +40,39 @@ def create_wallet(user_id):
 def get_wallet(user_id):
     return memory.get(str(user_id), {})
 
-# === TOOLS ===
+# === TOOLS ==
+
+def on_message(ws, message):
+    print("📩 AWP:", message)
+
+def on_error(ws, error):
+    print("❌ AWP ERROR:", error)
+
+def on_close(ws, close_status_code, close_msg):
+    print("🔌 AWP CLOSED")
+
+def on_open(ws):
+    print("🚀 CONNECTED TO AWP")
+
+    # contoh register agent
+    ws.send(json.dumps({
+        "type": "register",
+        "agent": "telegram-agent",
+        "capabilities": ["qa", "analysis"]
+    }))
+
+def start_awp():
+    ws = websocket.WebSocketApp(
+        "wss://tapi.awp.sh/ws/live",
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close,
+        on_open=on_open
+    )
+    ws.run_forever()
+
+threading.Thread(target=start_awp, daemon=True).start()
+
 def tool_create_wallet(user_id, _=None):
     if str(user_id) in memory and memory[str(user_id)].get("address"):
         return {
