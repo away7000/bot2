@@ -218,14 +218,21 @@ threading.Thread(target=autonomous_loop, daemon=True).start()
 
 # === TELEGRAM ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.message.from_user.id
+    if not update.message:
+        return
+
     text = update.message.text
-    reply = ask_ai(uid, text)
+    user_id = update.message.from_user.id
+
+    print("📩 TELEGRAM:", text)
+
+    reply = ask_ai(user_id, text)
+
     await update.message.reply_text(str(reply))
+
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.run_polling(drop_pending_updates=True)
-app.add_handler(MessageHandler(filters.TEXT, chat))
-
+app.add_handler(MessageHandler(filters.ALL, chat))
 print("🚀 AGENT LIVE")
 app.run_polling()
