@@ -69,7 +69,7 @@ TOOLS = {
 # === LOAD SKILL ===
 def load_skill():
     try:
-        with ("awp_skill/skill.md", "r", encoding="utf-8") as f:
+        with open("awp_skill/skill.md", "r", encoding="utf-8") as f:
             return f.read()
     except:
         return ""
