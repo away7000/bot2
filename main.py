@@ -43,7 +43,20 @@ def get_wallet(user_id):
 # === TOOLS ==
 
 def on_message(ws, message):
-    print("📩 AWP:", message)
+    data = json.loads(message)
+    print("📩 AWP:", data)
+
+    # kalau dapet pertanyaan
+    if data.get("type") == "question":
+        q = data.get("data", "")
+
+        answer = ask_ai("system", q)
+
+        # kirim jawaban
+        ws.send(json.dumps({
+            "type": "answer",
+            "data": answer
+        }))
 
 def on_error(ws, error):
     print("❌ AWP ERROR:", error)
@@ -54,11 +67,15 @@ def on_close(ws, close_status_code, close_msg):
 def on_open(ws):
     print("🚀 CONNECTED TO AWP")
 
-    # contoh register agent
     ws.send(json.dumps({
         "type": "register",
         "agent": "telegram-agent",
-        "capabilities": ["qa", "analysis"]
+        "capabilities": ["qa"]
+    }))
+
+    ws.send(json.dumps({
+        "type": "join",
+        "subnet": "benchmark"
     }))
 
 def start_awp():
