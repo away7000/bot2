@@ -147,17 +147,15 @@ def on_message(ws, message):
     except:
         return
 
-    # HANDLE TASK
+    # deteksi task
     if "question" in str(data).lower():
         q = data.get("question") or data.get("data")
-
-        print("🧠 TASK:", q)
 
         answer = ask_ai("system", q)
 
         ws.send(json.dumps({
-            "type": "answer_submit",
-            "answer": answer
+            "type": "answer",
+            "data": answer
         }))
         
 def send(ws, payload):
@@ -179,7 +177,7 @@ def keep_alive(ws):
         time.sleep(20)
 
 def on_open(ws):
-    print("🚀 CONNECTED TO AWP")
+    print("🚀 CONNECTED (LISTEN MODE)")
 
     # INIT SESSION
     ws.send(json.dumps({
