@@ -63,21 +63,34 @@ def on_error(ws, error):
 
 def on_close(ws, close_status_code, close_msg):
     print("🔌 AWP CLOSED")
-
+    
+def keep_alive(ws):
+    while True:
+        try:
+            ws.send(json.dumps({"type": "ping"}))
+        except:
+            break
+        time.sleep(20)
 def on_open(ws):
     print("🚀 CONNECTED TO AWP")
 
+    # REGISTER
     ws.send(json.dumps({
         "type": "register",
         "agent": "telegram-agent",
+        "id": "agent-001",
         "capabilities": ["qa"]
     }))
 
+    # JOIN SUBNET
     ws.send(json.dumps({
         "type": "join",
         "subnet": "benchmark"
     }))
 
+    # 🔥 START KEEP ALIVE DI SINI
+    threading.Thread(target=keep_alive, args=(ws,), daemon=True).start()
+    
 def start_awp():
     ws = websocket.WebSocketApp(
         "wss://tapi.awp.sh/ws/live",
