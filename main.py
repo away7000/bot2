@@ -11,9 +11,62 @@ asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
 TOKEN = os.getenv("TOKEN")
 OPENROUTER_KEY = os.getenv("BLINK_KEY")
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
+AWP_API = "https://tapi.awp.sh/api"
+MEMORY_FILE = "memory.json"
 
 # === MEMORY ===
-MEMORY_FILE = "memory.json"
+
+def awp_register():
+    payload = {
+        "address": WALLET_ADDRESS,
+        "agent": "telegram-agent"
+    }
+
+    r = requests.post(f"{AWP_API}/agent/register", json=payload)
+    print("REGISTER:", r.text)
+
+def awp_get_task():
+    payload = {
+        "address": WALLET_ADDRESS
+    }
+
+    r = requests.post(f"{AWP_API}/task/get", json=payload)
+
+    try:
+        return r.json()
+    except:
+        return None
+
+def awp_submit(answer, task_id):
+    payload = {
+        "address": WALLET_ADDRESS,
+        "task_id": task_id,
+        "answer": answer
+    }
+
+    r = requests.post(f"{AWP_API}/task/submit", json=payload)
+    print("SUBMIT:", r.text)
+
+def awp_worker_loop():
+    while True:
+        try:
+            task = awp_get_task()
+
+            if task and "question" in task:
+                print("🧠 TASK:", task)
+
+                q = task["question"]
+                task_id = task.get("id")
+
+                answer = ask_ai("system", q)
+
+                awp_submit(answer, task_id)
+
+        except Exception as e:
+            print("AWP ERROR:", e)
+
+        time.sleep(10)
+    
 
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
@@ -266,5 +319,6 @@ app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.ALL, chat))
 
 print("🚀 AGENT LIVE")
-
+awp_register()
+threading.Thread(target=awp_worker_loop, daemon=True).start()
 app.run_polling(drop_pending_updates=True)
