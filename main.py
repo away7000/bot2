@@ -1,6 +1,5 @@
 import os, json, time, threading, requests, secrets
 import websocket
-import threading
 from hashlib import sha256
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
@@ -13,7 +12,7 @@ TOKEN = os.getenv("TOKEN")
 OPENROUTER_KEY = os.getenv("BLINK_KEY")
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# === MEMORY (persistent) ===
+# === MEMORY ===
 MEMORY_FILE = "memory.json"
 
 def load_memory():
@@ -28,7 +27,7 @@ def save_memory(m):
 
 memory = load_memory()
 
-# === WALLET (real key + address, local) ===
+# === WALLET ===
 def create_wallet(user_id):
     private_key = secrets.token_hex(32)
     address = "0x" + sha256(private_key.encode()).hexdigest()[:40]
@@ -43,69 +42,7 @@ def create_wallet(user_id):
 def get_wallet(user_id):
     return memory.get(str(user_id), {})
 
-# === TOOLS ==
-
-def on_message(ws, message):
-    data = json.loads(message)
-    print("📩 AWP:", data)
-
-    # kalau dapet pertanyaan
-    if data.get("type") == "question":
-        q = data.get("data", "")
-
-        answer = ask_ai("system", q)
-
-        # kirim jawaban
-        ws.send(json.dumps({
-            "type": "answer",
-            "data": answer
-        }))
-
-def on_error(ws, error):
-    print("❌ AWP ERROR:", error)
-
-def on_close(ws, close_status_code, close_msg):
-    print("🔌 AWP CLOSED")
-    
-def keep_alive(ws):
-    while True:
-        try:
-            ws.send(json.dumps({"type": "ping"}))
-        except:
-            break
-        time.sleep(20)
-def on_open(ws):
-    print("🚀 CONNECTED TO AWP")
-
-    # REGISTER
-    ws.send(json.dumps({
-        "type": "register",
-        "agent": "telegram-agent",
-        "id": "agent-001",
-        "capabilities": ["qa"]
-    }))
-
-    # JOIN SUBNET
-    ws.send(json.dumps({
-        "type": "join",
-        "subnet": "benchmark"
-    }))
-
-    # 🔥 START KEEP ALIVE DI SINI
-    threading.Thread(target=keep_alive, args=(ws,), daemon=True).start()
-    
-def start_awp():
-    ws = websocket.WebSocketApp(
-        "wss://tapi.awp.sh/ws/live",
-        on_message=on_message,
-        on_error=on_error,
-        on_close=on_close,
-        on_open=on_open
-    )
-    ws.run_forever()
-
-threading.Thread(target=start_awp, daemon=True).start()
-
+# === TOOLS ===
 def tool_create_wallet(user_id, _=None):
     if str(user_id) in memory and memory[str(user_id)].get("address"):
         return {
@@ -139,7 +76,7 @@ def load_skill():
 
 SKILL = load_skill()
 
-# === AI AGENT ===
+# === AI ===
 def ask_ai(user_id, text):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
@@ -161,9 +98,8 @@ TOOLS:
 - get_balance
 - submit_task
 
-If a tool is needed, reply ONLY JSON:
+If tool needed reply JSON:
 {{"tool":"name","input":"text"}}
-Else reply normal.
 """
 
     messages = [{"role": "system", "content": system_prompt}] + history[-5:] + [
@@ -181,7 +117,6 @@ Else reply normal.
 
         reply = res["choices"][0]["message"]["content"]
 
-        # tool execution
         try:
             parsed = json.loads(reply)
             if "tool" in parsed:
@@ -193,7 +128,6 @@ Else reply normal.
         except:
             pass
 
-        # save history
         history.append({"role": "user", "content": text})
         history.append({"role": "assistant", "content": reply})
         memory[str(user_id)] = {**user_data, "history": history[-10:]}
@@ -204,17 +138,52 @@ Else reply normal.
     except Exception as e:
         return "ERROR: " + str(e)
 
-# === AUTO LOOP ===
-def autonomous_loop():
-    while True:
-        for uid in list(memory.keys()):
-            try:
-                ask_ai(uid, "continue your task autonomously")
-            except:
-                pass
-        time.sleep(60)
+# === AWP ===
+def on_message(ws, message):
+    print("📩 AWP RAW:", message)
 
-threading.Thread(target=autonomous_loop, daemon=True).start()
+def on_error(ws, error):
+    print("❌ AWP ERROR:", error)
+
+def on_close(ws, a, b):
+    print("🔌 AWP CLOSED")
+
+def keep_alive(ws):
+    while True:
+        try:
+            ws.send(json.dumps({"type": "ping"}))
+        except:
+            break
+        time.sleep(20)
+
+def on_open(ws):
+    print("🚀 CONNECTED TO AWP")
+
+    ws.send(json.dumps({
+        "type": "register",
+        "agent": "telegram-agent",
+        "id": "agent-001",
+        "capabilities": ["qa"]
+    }))
+
+    ws.send(json.dumps({
+        "type": "join",
+        "subnet": "benchmark"
+    }))
+
+    threading.Thread(target=keep_alive, args=(ws,), daemon=True).start()
+
+def start_awp():
+    ws = websocket.WebSocketApp(
+        "wss://tapi.awp.sh/ws/live",
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close,
+        on_open=on_open
+    )
+    ws.run_forever()
+
+threading.Thread(target=start_awp, daemon=True).start()
 
 # === TELEGRAM ===
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,9 +199,11 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(str(reply))
 
-
+# === RUN ===
 app = ApplicationBuilder().token(TOKEN).build()
-app.run_polling(drop_pending_updates=True)
+
 app.add_handler(MessageHandler(filters.ALL, chat))
+
 print("🚀 AGENT LIVE")
-app.run_polling()
+
+app.run_polling(drop_pending_updates=True)
