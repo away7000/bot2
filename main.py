@@ -41,7 +41,10 @@ def get_wallet(user_id):
 # === TOOLS ===
 def tool_create_wallet(user_id, _=None):
     if str(user_id) in memory and memory[str(user_id)].get("address"):
-        return {"msg": "wallet exists", "address": memory[str(user_id]["address"]]}
+        return {
+            "msg": "wallet exists",
+            "address": memory[str(user_id)]["address"]
+        }
     return create_wallet(user_id)
 
 def tool_get_balance(user_id, _=None):
