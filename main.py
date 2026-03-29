@@ -6,7 +6,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 TOKEN = os.getenv("TOKEN")
 BLINK_KEY = os.getenv("BLINK_KEY")
 
-BLINK_API = "https://api.blink.new/v1/chat/completions"
+BLINK_API = "https://core.blink.new/api/ai"
 
 # === AI CALL ===
 def ask_ai(text):
